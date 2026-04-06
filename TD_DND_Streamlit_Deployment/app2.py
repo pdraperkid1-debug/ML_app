@@ -523,6 +523,31 @@ def draw_hero_profile():
             hero.cooldown -= 5
             st.rerun()
 
+# --- Fragment-based Animation for Smoother Battle Canvas ---
+@st.fragment(run_every=0.05)
+def battle_canvas():
+    eng = st.session_state.engine
+    
+    # Run simulation steps if wave is active
+    if eng.wave_manager.wave_active:
+        eng.run_simulation_step()
+        eng.run_simulation_step()
+        
+        # Draw current frame
+        st.image(render_frame(eng), use_container_width=True)
+        
+        # If wave finished during this frame, handle rewards and a full rerun
+        if not eng.wave_manager.wave_active:
+            eng.gold += (eng.wave_manager.wave_number - 1) * 50
+            eng.mana += 50
+            st.rerun() # Full rerun to update stats outside fragment
+    else:
+        # Static frame and start button when wave is idle
+        st.image(render_frame(eng), use_container_width=True)
+        if st.button("⚔️ Start Animated Wave", type="primary"):
+            eng.wave_manager.start_wave(eng.simulation_logs)
+            st.rerun()
+
 def draw_adventure():
     st.header("🗺️ The Adventure")
     eng = st.session_state.engine
@@ -541,34 +566,8 @@ def draw_adventure():
     st.divider()
     
     st.subheader("Battle Canvas")
-    canvas_placeholder = st.empty()
-    
-    # --- Rerun-based Animation Loop ---
-    if eng.wave_manager.wave_active:
-        # Run simulation steps for the current frame
-        eng.run_simulation_step()
-        eng.run_simulation_step()
-        
-        # Render the current frame to the placeholder
-        canvas_placeholder.image(render_frame(eng), use_container_width=True)
-        
-        # Check if wave finished during this frame
-        if not eng.wave_manager.wave_active:
-            # Award rewards when finished
-            eng.gold += (eng.wave_manager.wave_number - 1) * 50
-            eng.mana += 50
-            # One last rerun to show the idle state and "Start" button
-            st.rerun()
-            
-        # Forces a brief pause and then reruns the entire script to draw the next frame
-        time.sleep(0.01)
-        st.rerun()
-    else:
-        # Static frame when wave is not active
-        canvas_placeholder.image(render_frame(eng), use_container_width=True)
-        if st.button("⚔️ Start Animated Wave", type="primary"):
-            eng.wave_manager.start_wave(eng.simulation_logs)
-            st.rerun()
+    # Call the fragment
+    battle_canvas()
                 
     st.subheader("Active Party Status")
     cols = st.columns(4)
