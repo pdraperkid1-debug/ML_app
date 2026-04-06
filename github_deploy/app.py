@@ -490,7 +490,12 @@ def draw_camp():
                     st.markdown(f"**{hero.name}**")
                     st.write(f"*{hero.hero_class} ({hero.hero_race})*")
                     st.write(f"HP: {hero.hp}/{hero.max_hp} | DMG: {hero.attack_damage}")
-                    hero.active_in_wave = st.checkbox(f"Active", value=hero.active_in_wave, key=f"active_{hero.name}")
+                    hero.active_in_wave = st.checkbox(
+                        f"Active", 
+                        value=hero.active_in_wave, 
+                        key=f"active_{hero.name}",
+                        disabled=(eng.state != GameState.CAMP)
+                    )
                     
                     if st.button("View Profile", key=f"profile_{hero.name}"):
                         eng.profile_hero_index = eng.party.index(hero)
@@ -565,26 +570,34 @@ def draw_adventure():
 
     if not eng.wave_manager.wave_active:
         canvas_placeholder.image(render_frame(eng), use_container_width=True)
-        btn_label = "⚔️ Start Animated Wave" if not st.session_state.auto_start else "⚔️ Wave Ready (Click to Start)"
         
-        if st.button(btn_label, type="primary") or st.session_state.auto_start:
-            st.session_state.auto_start = False # Reset so it doesn't loop forever
+        # We check both the manual button and the auto-start state
+        start_clicked = st.button("⚔️ Start Animated Wave", type="primary")
+        
+        if start_clicked or st.session_state.get("auto_start", False):
+            st.session_state.auto_start = False # Reset immediately
             eng.wave_manager.start_wave(eng.simulation_logs)
             
-            # Inline Animation Loop
-            while eng.wave_manager.wave_active:
-                eng.run_simulation_step()
-                eng.run_simulation_step()
-                eng.run_simulation_step()
-                
-                frame = render_frame(eng)
-                canvas_placeholder.image(frame, use_container_width=True)
-                time.sleep(0.01)
+            # Show a loading indicator briefly or just jump into the loop
+            with st.spinner("⚔️ Battle Commencing..."):
+                # Inline Animation Loop
+                while eng.wave_manager.wave_active:
+                    # Simulation steps per frame
+                    eng.run_simulation_step()
+                    eng.run_simulation_step()
+                    eng.run_simulation_step()
+                    
+                    frame = render_frame(eng)
+                    canvas_placeholder.image(frame, use_container_width=True)
+                    # Slower sleep helps Streamlit Cloud keep up with the frame stream
+                    time.sleep(0.05) 
                 
             # Award rewards when finished
             if not eng.wave_manager.wave_active:
                 eng.gold += (eng.wave_manager.wave_number - 1) * 50
                 eng.mana += 50
+            st.success(f"🏆 Wave Complete! Gold: +{(eng.wave_manager.wave_number - 1) * 50} | Mana: +50")
+            time.sleep(1.0) # Let them see the success before the rerun
             st.rerun()
     else:
         # If mid-wave due to a weird refresh, keep showing the frame
