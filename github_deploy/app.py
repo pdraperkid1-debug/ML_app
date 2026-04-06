@@ -10,11 +10,27 @@ st.set_page_config(page_title="TD D&D Streamlit", layout="wide")
 # --- Configuration & Constants ---
 SCREEN_WIDTH, SCREEN_HEIGHT = 1000, 700
 
-def load_pil_image(filepath, scale=4):
+# --- Path Configuration ---
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+def load_pil_image(filepath_rel, scale=4):
+    filepath = os.path.join(BASE_DIR, *filepath_rel.split("/"))
     try:
+        if not os.path.exists(filepath):
+            # Fallback for Case Sensitivity on Linux
+            parent = os.path.dirname(filepath)
+            if os.path.exists(parent):
+                files = os.listdir(parent)
+                for f in files:
+                    if f.lower() == os.path.basename(filepath).lower():
+                        filepath = os.path.join(parent, f)
+                        break
+        
         img = Image.open(filepath).convert("RGBA")
         return img.resize((img.width * scale, img.height * scale), Image.NEAREST)
     except Exception as e:
+        # Return a visible placeholder and print error for Streamlit logs
+        print(f"Error loading {filepath}: {e}")
         return Image.new("RGBA", (50 * scale, 50 * scale), (255, 0, 255, 128))
 
 # --- Helper Classes ---
@@ -104,8 +120,8 @@ class Hero:
         
         self.rect = RectLike(pos[0], pos[1], 48, 64)
         
-        self.image_1 = load_pil_image(os.path.join("assets", "heroes", f"{self.name}_1.png"))
-        self.image_2 = load_pil_image(os.path.join("assets", "heroes", f"{self.name}_2.png"))
+        self.image_1 = load_pil_image("assets/heroes/" + f"{self.name}_1.png")
+        self.image_2 = load_pil_image("assets/heroes/" + f"{self.name}_2.png")
         
     def take_damage(self, amount):
         self.hp -= amount
@@ -158,7 +174,7 @@ class Ally:
         self.pos = list(pos)
         self.ally_type = ally_type
         self.rect = RectLike(self.pos[0], self.pos[1], 48, 64)
-        self.image = load_pil_image(os.path.join("assets", "allies", f"hero_{self.ally_type}.png"))
+        self.image = load_pil_image("assets/allies/" + f"hero_{self.ally_type}.png")
         self.base_damage = 10
         self.bonus_damage = 0
         self.attack_range = 150
@@ -215,8 +231,8 @@ class Enemy:
         self.reached_end = False
         self.is_boss = is_boss
         
-        self.image_1 = load_pil_image(os.path.join("assets", "enemies", f"{self.type_name}_1.png"))
-        self.image_2 = load_pil_image(os.path.join("assets", "enemies", f"{self.type_name}_2.png"))
+        self.image_1 = load_pil_image("assets/enemies/" + f"{self.type_name}_1.png")
+        self.image_2 = load_pil_image("assets/enemies/" + f"{self.type_name}_2.png")
         self.anim_timer = 0
         
         if self.is_boss:
@@ -441,6 +457,7 @@ def draw_camp():
     with col1:
         if st.button("Start Adventure", disabled=active_count == 0 or active_count > 4):
             eng.state = GameState.ADVENTURE
+            st.session_state.auto_start = True # Trigger auto-animation
             eng.allies.clear()
             eng.simulation_logs.clear()
             if not eng.hard_mode:
@@ -542,14 +559,20 @@ def draw_adventure():
     st.subheader("Battle Canvas")
     canvas_placeholder = st.empty()
     
+    # Auto-start logic
+    if "auto_start" not in st.session_state:
+        st.session_state.auto_start = True
+
     if not eng.wave_manager.wave_active:
         canvas_placeholder.image(render_frame(eng), use_container_width=True)
-        if st.button("⚔️ Start Animated Wave", type="primary"):
+        btn_label = "⚔️ Start Animated Wave" if not st.session_state.auto_start else "⚔️ Wave Ready (Click to Start)"
+        
+        if st.button(btn_label, type="primary") or st.session_state.auto_start:
+            st.session_state.auto_start = False # Reset so it doesn't loop forever
             eng.wave_manager.start_wave(eng.simulation_logs)
             
             # Inline Animation Loop
             while eng.wave_manager.wave_active:
-                # Fast forward a bit per frame so it's smooth but quick
                 eng.run_simulation_step()
                 eng.run_simulation_step()
                 eng.run_simulation_step()
