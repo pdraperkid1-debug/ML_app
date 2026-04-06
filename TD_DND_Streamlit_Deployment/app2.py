@@ -543,28 +543,32 @@ def draw_adventure():
     st.subheader("Battle Canvas")
     canvas_placeholder = st.empty()
     
-    if not eng.wave_manager.wave_active:
+    # --- Rerun-based Animation Loop ---
+    if eng.wave_manager.wave_active:
+        # Run simulation steps for the current frame
+        eng.run_simulation_step()
+        eng.run_simulation_step()
+        
+        # Render the current frame to the placeholder
+        canvas_placeholder.image(render_frame(eng), use_container_width=True)
+        
+        # Check if wave finished during this frame
+        if not eng.wave_manager.wave_active:
+            # Award rewards when finished
+            eng.gold += (eng.wave_manager.wave_number - 1) * 50
+            eng.mana += 50
+            # One last rerun to show the idle state and "Start" button
+            st.rerun()
+            
+        # Forces a brief pause and then reruns the entire script to draw the next frame
+        time.sleep(0.01)
+        st.rerun()
+    else:
+        # Static frame when wave is not active
         canvas_placeholder.image(render_frame(eng), use_container_width=True)
         if st.button("⚔️ Start Animated Wave", type="primary"):
             eng.wave_manager.start_wave(eng.simulation_logs)
-            
-            # Inline Animation Loop
-            while eng.wave_manager.wave_active:
-                eng.run_simulation_step()
-                eng.run_simulation_step()
-                
-                frame = render_frame(eng)
-                canvas_placeholder.image(frame, use_container_width=True)
-                time.sleep(0.02) # Balanced sleep for visibility
-                
-            # Award rewards when finished
-            if not eng.wave_manager.wave_active:
-                eng.gold += (eng.wave_manager.wave_number - 1) * 50
-                eng.mana += 50
             st.rerun()
-    else:
-        # If mid-wave due to a weird refresh, keep showing the frame
-        canvas_placeholder.image(render_frame(eng), use_container_width=True)
                 
     st.subheader("Active Party Status")
     cols = st.columns(4)
